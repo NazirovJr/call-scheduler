@@ -6,23 +6,107 @@ Java 21 · Spring Boot 4.1 · Spring Data JPA · PostgreSQL 17 · Flyway · Test
 
 ## Запуск
 
+Нужны Git и Docker с Compose v2. Проверить, что они есть:
+
 ```bash
+git --version
+docker compose version
+```
+
+Если команда не найдена — установка на чистую систему:
+
+<details>
+<summary>Windows 10/11</summary>
+
+В PowerShell от имени администратора:
+
+```powershell
+wsl --install --no-distribution
+```
+
+Перезагрузите компьютер и снова в PowerShell:
+
+```powershell
+winget install -e --id Git.Git
+winget install -e --id Docker.DockerDesktop
+```
+
+Запустите Docker Desktop из меню «Пуск», дождитесь статуса «Engine running» и откройте новое окно
+PowerShell. Если `winget` не найден — обновите «Установщик приложений» (App Installer) в Microsoft Store.
+
+</details>
+
+<details>
+<summary>macOS</summary>
+
+```bash
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+```
+
+Установщик Homebrew заодно поставит Git (в составе Xcode Command Line Tools). Если в конце он выведет
+команды в блоке «Next steps» — выполните их, чтобы заработал `brew`. Затем:
+
+```bash
+brew install --cask docker-desktop
+open -a Docker
+```
+
+Дождитесь, пока Docker Desktop покажет статус «Engine running».
+
+</details>
+
+<details>
+<summary>Ubuntu / Debian</summary>
+
+```bash
+sudo apt update && sudo apt install -y git curl
+curl -fsSL https://get.docker.com | sudo sh
+sudo usermod -aG docker $USER
+```
+
+Выйдите из системы и войдите снова, чтобы Docker работал без `sudo`.
+
+</details>
+
+Затем:
+
+```bash
+git clone https://github.com/NazirovJr/call-scheduler.git
+cd call-scheduler
 docker compose up --build
 ```
 
-Нужен только Docker. API поднимется на `http://localhost:8080`, схема БД и три менеджера (id 1–3)
-создаются миграциями из [src/main/resources/db/migration](src/main/resources/db/migration).
+Первая сборка занимает несколько минут. API поднимется на `http://localhost:8080`, схема БД и три
+менеджера (id 1–3) создаются миграциями из [src/main/resources/db/migration](src/main/resources/db/migration).
+Проверка без дополнительных программ: откройте `http://localhost:8080/companies` в браузере — вернётся пустой список.
 
 Примеры запросов — в [requests.http](requests.http) (открывается в IntelliJ IDEA и VS Code REST Client).
 Сброс данных: `docker compose down`.
 
 ## Тесты
 
+Нужны JDK 21 и запущенный Docker (его установка — выше): тесты работают с настоящим PostgreSQL через
+Testcontainers. Maven ставить не нужно — его скачает `mvnw`. Проверить JDK:
+
+```bash
+java -version
+```
+
+Если команда не найдена или версия ниже 21:
+
+| ОС | Установка JDK 21 |
+|---|---|
+| Windows | `winget install -e --id EclipseAdoptium.Temurin.21.JDK` |
+| macOS | `brew install --cask temurin@21` |
+| Ubuntu 20.04+ / Debian 13+ | `sudo apt install -y openjdk-21-jdk` |
+
+Затем в новом терминале из папки проекта:
+
 ```bash
 ./mvnw test
 ```
 
-Нужны JDK 21 и запущенный Docker: тесты работают с настоящим PostgreSQL через Testcontainers.
+В Windows PowerShell — `.\mvnw.cmd test`.
 
 ## API
 
