@@ -6,8 +6,10 @@ import java.time.Instant;
 import com.callscheduler.company.Company;
 import com.callscheduler.company.CompanyRepository;
 import com.callscheduler.error.InvalidRequestException;
+import com.callscheduler.meeting.MeetingCancelled;
 import com.callscheduler.meeting.MeetingRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -41,5 +43,14 @@ public class CallService {
         company.setStatus(request.result().getCompanyStatus());
         Call call = calls.save(new Call(company.getId(), request.result(), request.meetingId(), now));
         return CallResponse.from(call);
+    }
+
+    // Статус откатывается, только если получен звонком об отменённой встрече, а не о более ранней
+    @EventListener
+    public void onMeetingCancelled(MeetingCancelled event) {
+        Company company = companies.lockById(event.companyId());
+        if (calls.existsByMeetingId(event.meetingId())) {
+            company.meetingCancelled();
+        }
     }
 }

@@ -2,6 +2,7 @@ package com.callscheduler;
 
 import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.containsString;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -9,6 +10,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.springframework.http.MediaType;
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
 
 class CompanyApiTest extends ApiTest {
 
@@ -65,5 +68,18 @@ class CompanyApiTest extends ApiTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content[*].id").value(contains(first, second, third)));
         mvc.perform(get("/companies").param("status", "unknown")).andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void standardRefusalsAreReportedInRussian() throws Exception {
+        mvc.perform(get("/unknown"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.detail").value("Ресурс не найден"));
+        mvc.perform(delete("/companies"))
+                .andExpect(status().isMethodNotAllowed())
+                .andExpect(jsonPath("$.detail").value("Метод DELETE не поддерживается"));
+        mvc.perform(MockMvcRequestBuilders.post("/companies").contentType(MediaType.TEXT_PLAIN).content("ТОО"))
+                .andExpect(status().isUnsupportedMediaType())
+                .andExpect(jsonPath("$.detail").value("Тип содержимого text/plain;charset=UTF-8 не поддерживается"));
     }
 }

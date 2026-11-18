@@ -52,6 +52,7 @@ class MeetingApiTest extends ApiTest {
     @CsvSource({
             "2026-11-17T04:00:00Z, 201", // 09:00 — начало рабочего дня
             "2026-11-17T12:00:00Z, 201", // 17:00 — заканчивается ровно в 18:00
+            "2026-11-17T10:00:00+05:00, 201", // смещение переводится в UTC
             "2026-11-17T03:59:00Z, 400", // 08:59
             "2026-11-17T12:01:00Z, 400", // 17:01
             "2026-11-17T12:30:00Z, 400", // 17:30
@@ -173,6 +174,33 @@ class MeetingApiTest extends ApiTest {
                 """.formatted(company))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.detail").value(containsString("startsAt")));
+    }
+
+    @Test
+    void datesBeyondSupportedRangeAreRejected() throws Exception {
+        int company = createCompany();
+
+        // не помещаются в календарь java.time
+        bookMeeting(company, 1, "+1000000000-01-01T05:00:00Z").andExpect(status().isBadRequest());
+        mvc.perform(get("/managers/1/schedule").param("date", "+999999999-12-31")).andExpect(status().isBadRequest());
+        // рабочий день, но за пределами timestamptz
+        bookMeeting(company, 1, "+300000-01-03T05:00:00Z").andExpect(status().isBadRequest());
+        mvc.perform(get("/managers/1/schedule").param("date", "+300000-01-01")).andExpect(status().isBadRequest());
+    }
+
+    @ParameterizedTest
+    @CsvSource(delimiter = '|', value = {
+            "{\"companyId\": 1, \"managerId\": 1, \"startsAt\": 1794891600}                     | startsAt", // секунды эпохи
+            "{\"companyId\": 1, \"managerId\": 1, \"startsAt\": \"1794891600\"}                 | startsAt",
+            "{\"companyId\": 1.9, \"managerId\": 1, \"startsAt\": \"2026-11-17T05:00:00Z\"}     | companyId",
+            "{\"companyId\": \"1\", \"managerId\": 1, \"startsAt\": \"2026-11-17T05:00:00Z\"}   | companyId",
+    })
+    void looselyTypedValuesAreRejected(String json, String invalidField) throws Exception {
+        createCompany();
+
+        post("/meetings", json)
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.detail").value(containsString(invalidField)));
     }
 
     @Test

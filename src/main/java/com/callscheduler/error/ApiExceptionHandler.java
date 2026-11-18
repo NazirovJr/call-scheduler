@@ -1,7 +1,9 @@
 package com.callscheduler.error;
 
+import java.time.DateTimeException;
 import java.util.stream.Collectors;
 
+import org.hibernate.exception.DataException;
 import org.springframework.beans.TypeMismatchException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpHeaders;
@@ -36,9 +38,19 @@ class ApiExceptionHandler extends ResponseEntityExceptionHandler {
         return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());
     }
 
-    // Страховка от гонок: сработало ограничение БД (уникальный БИН, пересечение встреч менеджера)
+    // Дата из запроса не помещается в календарь java.time: арифметика над ней переполнилась
+    @ExceptionHandler(DateTimeException.class)
+    ProblemDetail handleDateOverflow() {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, "Дата вне допустимого диапазона");
+    }
+
     @ExceptionHandler(DataIntegrityViolationException.class)
-    ProblemDetail handleDataIntegrityViolation() {
+    ProblemDetail handleDataIntegrityViolation(DataIntegrityViolationException ex) {
+        // СУБД не приняла само значение из запроса, например дату за пределами timestamptz
+        if (ex.contains(DataException.class)) {
+            return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, "Запрос содержит недопустимое значение");
+        }
+        // Страховка от гонок: сработало ограничение БД (уникальный БИН, пересечение встреч менеджера)
         return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, "Запрос конфликтует с существующими данными");
     }
 

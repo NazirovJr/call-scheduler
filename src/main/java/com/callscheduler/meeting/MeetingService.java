@@ -11,6 +11,7 @@ import com.callscheduler.error.InvalidRequestException;
 import com.callscheduler.error.NotFoundException;
 import com.callscheduler.manager.ManagerRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -22,6 +23,7 @@ public class MeetingService {
     private final MeetingRepository meetings;
     private final CompanyRepository companies;
     private final ManagerRepository managers;
+    private final ApplicationEventPublisher events;
     private final Clock clock;
 
     @Transactional
@@ -79,7 +81,7 @@ public class MeetingService {
     private Meeting cancel(Long id, Instant now) {
         Meeting meeting = lockActiveMeeting(id, now);
         meeting.cancel();
-        companies.lockById(meeting.getCompanyId()).meetingCancelled();
+        events.publishEvent(new MeetingCancelled(id, meeting.getCompanyId()));
         return meeting;
     }
 

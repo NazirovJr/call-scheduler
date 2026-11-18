@@ -23,7 +23,7 @@ abstract class ApiTest {
     @Autowired
     protected MockMvc mvc;
     @Autowired
-    private JdbcTemplate jdbc;
+    protected JdbcTemplate jdbc;
 
     private int companyCount;
 

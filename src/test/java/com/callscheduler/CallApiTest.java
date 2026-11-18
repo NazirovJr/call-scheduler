@@ -60,6 +60,21 @@ class CallApiTest extends ApiTest {
     }
 
     @Test
+    void cancellingMeetingKeepsStatusSetByEarlierMeeting() throws Exception {
+        int company = createCompany();
+        int held = id(bookMeeting(company, 1, TUE_10));
+        call(company, "meeting_set", held).andExpect(status().isCreated());
+        // встреча состоялась: в обход API сдвигаем её в прошлое
+        jdbc.update("UPDATE meetings SET starts_at = starts_at - interval '7 days', "
+                + "ends_at = ends_at - interval '7 days' WHERE id = ?", held);
+
+        int next = id(bookMeeting(company, 1, TUE_10));
+        cancel(next).andExpect(status().isOk());
+
+        companiesWithStatus("meeting_set").andExpect(jsonPath("$.content[*].id").value(contains(company)));
+    }
+
+    @Test
     void invalidCallsAreRejected() throws Exception {
         int company = createCompany();
         int meeting = id(bookMeeting(company, 1, TUE_10));
@@ -67,6 +82,12 @@ class CallApiTest extends ApiTest {
         call(company, "refused", meeting).andExpect(status().isBadRequest());
         call(999, "refused", null).andExpect(status().isNotFound());
         call(company, "busy", null)
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.detail").value(containsString("result")));
+        // порядковый номер вместо названия результата
+        post("/calls", """
+                {"companyId": %d, "result": 0}
+                """.formatted(company))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.detail").value(containsString("result")));
     }
