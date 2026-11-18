@@ -1,0 +1,137 @@
+# Сценарий для чистой БД (сразу после docker compose up): выполнять сверху вниз,
+# id в запросах совпадают с теми, что выдаст API. Сброс данных: docker compose down.
+# Время — UTC; Алматы = UTC+5, то есть 05:00Z — это 10:00 по Алматы. 07.01.2030 — понедельник.
+
+@host = http://localhost:8080
+
+### Добавить организацию → 201, id = 1, status = new
+POST {{host}}/companies
+Content-Type: application/json
+
+{"name": "ТОО Ромашка", "bin": "123456789012", "phone": "+77011234567"}
+
+### Вторая организация → 201, id = 2
+POST {{host}}/companies
+Content-Type: application/json
+
+{"name": "ТОО Василёк", "bin": "210987654321", "phone": "87017654321"}
+
+### Третья организация → 201, id = 3
+POST {{host}}/companies
+Content-Type: application/json
+
+{"name": "ИП Тюльпан", "bin": "111222333444", "phone": "+77051112233"}
+
+### Повторный БИН → 409
+POST {{host}}/companies
+Content-Type: application/json
+
+{"name": "ТОО Дубль", "bin": "123456789012", "phone": "+77011234567"}
+
+### Некорректные поля → 400 с перечнем ошибок
+POST {{host}}/companies
+Content-Type: application/json
+
+{"name": "", "bin": "123", "phone": "abc"}
+
+### Список с фильтром и пагинацией → 200
+GET {{host}}/companies?status=new&page=0&size=2
+
+### Звонок: не дозвонились → 201, организация 1 получает статус no_answer
+POST {{host}}/calls
+Content-Type: application/json
+
+{"companyId": 1, "result": "no_answer"}
+
+### Звонок meeting_set без созданной встречи → 400
+POST {{host}}/calls
+Content-Type: application/json
+
+{"companyId": 1, "result": "meeting_set"}
+
+### Назначить встречу: пн 10:00–11:00 по Алматы → 201, id = 1
+POST {{host}}/meetings
+Content-Type: application/json
+
+{"companyId": 1, "managerId": 1, "startsAt": "2030-01-07T05:00:00Z"}
+
+### Звонок meeting_set с созданной встречей → 201, организация 1 получает статус meeting_set
+POST {{host}}/calls
+Content-Type: application/json
+
+{"companyId": 1, "result": "meeting_set", "meetingId": 1}
+
+### Пересечение у менеджера (10:30) → 409
+POST {{host}}/meetings
+Content-Type: application/json
+
+{"companyId": 2, "managerId": 1, "startsAt": "2030-01-07T05:30:00Z"}
+
+### Встык (11:00–12:00) — не конфликт → 201, id = 2
+POST {{host}}/meetings
+Content-Type: application/json
+
+{"companyId": 2, "managerId": 1, "startsAt": "2030-01-07T06:00:00Z"}
+
+### Вторая активная встреча той же организации у другого менеджера → 409
+POST {{host}}/meetings
+Content-Type: application/json
+
+{"companyId": 1, "managerId": 2, "startsAt": "2030-01-08T05:00:00Z"}
+
+### Граница рабочего дня: начало в 17:30 → 400
+POST {{host}}/meetings
+Content-Type: application/json
+
+{"companyId": 3, "managerId": 2, "startsAt": "2030-01-07T12:30:00Z"}
+
+### Граница рабочего дня: 17:00–18:00 умещается → 201, id = 3
+POST {{host}}/meetings
+Content-Type: application/json
+
+{"companyId": 3, "managerId": 2, "startsAt": "2030-01-07T12:00:00Z"}
+
+### Суббота → 400
+POST {{host}}/meetings
+Content-Type: application/json
+
+{"companyId": 2, "managerId": 3, "startsAt": "2030-01-12T05:00:00Z"}
+
+### Время в прошлом → 400
+POST {{host}}/meetings
+Content-Type: application/json
+
+{"companyId": 2, "managerId": 3, "startsAt": "2020-01-06T05:00:00Z"}
+
+### Перенести встречу 1 на 14:00 → 200, прежнее время остаётся в history, createdAt не меняется
+PATCH {{host}}/meetings/1
+Content-Type: application/json
+
+{"action": "reschedule", "startsAt": "2030-01-07T09:00:00Z"}
+
+### Отменить встречу 2 → 200
+PATCH {{host}}/meetings/2
+Content-Type: application/json
+
+{"action": "cancel"}
+
+### Повторная отмена → 409
+PATCH {{host}}/meetings/2
+Content-Type: application/json
+
+{"action": "cancel"}
+
+### Расписание менеджера 1 на день → 200: сначала активные по времени, в конце отменённые
+GET {{host}}/managers/1/schedule?date=2030-01-07
+
+### Отменить встречу 1 → 200, организация 1 возвращается из meeting_set в new
+PATCH {{host}}/meetings/1
+Content-Type: application/json
+
+{"action": "cancel"}
+
+### Проверить откат статуса → 200, организация 1 снова в списке new
+GET {{host}}/companies?status=new
+
+### Несуществующий менеджер → 404
+GET {{host}}/managers/99/schedule?date=2030-01-07
